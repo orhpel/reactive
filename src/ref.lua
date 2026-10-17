@@ -379,9 +379,10 @@ end
 -- same as Vue.
 -- ported from ref.ts's `toRefs()`
 function M.toRefs(source)
+  local toRef = M.toRef
   local result = {}
   for key in pairs(source) do
-    result[key] = M.toRef(source, key)
+    result[key] = toRef(source, key)
   end
   return result
 end
