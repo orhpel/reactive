@@ -60,18 +60,13 @@
   first), not something to silently paper over here.
 ]]
 
-local effect = require("reactive.effect")
-
 local M = {}
+---@cast M Reactive.ScopeModule
 
 -- ===========================================================================
 -- module-level active-scope tracking
 -- ===========================================================================
 
--- The EffectScope currently being run() (i.e. mid-way through its
--- run(fn) call), or nil. This is what ReactiveEffect.new() consults to
--- decide whether a newly-created effect should be auto-registered.
--- ported from effectScope.ts's `activeEffectScope`
 M.activeEffectScope = nil
 
 -- ===========================================================================
@@ -79,10 +74,11 @@ M.activeEffectScope = nil
 -- ===========================================================================
 
 local EffectScope = {}
+---@cast EffectScope Reactive.EffectScope
+
 EffectScope.__index = EffectScope
 M.EffectScope = EffectScope
 
--- ported from effectScope.ts's `EffectScope` constructor
 function EffectScope.new()
   local self = setmetatable({
     active = true,
@@ -92,20 +88,10 @@ function EffectScope.new()
   return self
 end
 
---- Registers a subscriber (anything effect.lua's ReactiveEffect.new()
---- produces -- includes watch()/watchEffect() watchers, since those are
---- built on ReactiveEffect too) into this scope's effect list. Called
---- by ReactiveEffect.new() itself, not meant to be called directly by
---- user code.
 function EffectScope:_recordEffect(sub)
   self.effects[#self.effects + 1] = sub
 end
 
---- Runs fn with this scope active, so any effect()/computed()/watch()/
---- watchEffect() created during fn gets collected into this scope.
---- Returns fn's return value, or nil if the scope was already stopped
---- (matches Vue: an inactive scope's run() is a no-op, not an error).
---- ported from effectScope.ts's `EffectScope:run()`
 function EffectScope:run(fn)
   if not self.active then
     return nil
@@ -120,11 +106,6 @@ function EffectScope:run(fn)
   return result
 end
 
---- Stops every effect collected by this scope, runs every
---- onScopeDispose() callback registered against it (LIFO, matching
---- Vue), and marks the scope inactive. Idempotent: calling stop() on an
---- already-stopped scope is a no-op, same as ReactiveEffect:stop().
---- ported from effectScope.ts's `EffectScope:stop()`
 function EffectScope:stop()
   if not self.active then
     return
@@ -155,23 +136,14 @@ end
 -- public effectScope() / getCurrentScope() / onScopeDispose() API
 -- ===========================================================================
 
--- ported from effectScope.ts's `effectScope()`
 function M.effectScope()
   return EffectScope.new()
 end
 
--- ported from effectScope.ts's `getCurrentScope()`
 function M.getCurrentScope()
   return M.activeEffectScope
 end
 
---- Registers a dispose callback against the currently active scope
---- (i.e. called from within a scope:run(fn)). Called right before that
---- scope's effects are stopped, in LIFO order, when the scope is
---- stopped. failSilently: if true, do nothing (no error) when there's
---- no active scope to attach to -- mirrors onEffectCleanup()'s and
---- onWatcherCleanup()'s own failSilently parameter for consistency.
---- ported from effectScope.ts's `onScopeDispose()`
 function M.onScopeDispose(fn, failSilently)
   local scope = M.activeEffectScope
   if scope then

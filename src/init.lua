@@ -16,12 +16,12 @@
   left out).
 ]]
 
-local dep_module = require("reactive.dep")
-local effect = require("reactive.effect")
-local ref_module = require("reactive.ref")
-local reactive_module = require("reactive.reactive")
-local watch_module = require("reactive.watch")
-local scope_module = require("reactive.scope")
+local dep_module = require("dep")
+local effect = require("effect")
+local ref_module = require("ref")
+local reactive_module = require("reactive")
+local watch_module = require("watch")
+local scope_module = require("scope")
 
 local M = {}
 

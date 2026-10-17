@@ -1,0 +1,7 @@
+{
+  "runtime.path": [
+    "${workspaceFolder}/src/?.lua",
+    "${workspaceFolder}/src/?/init.lua"
+  ],
+  "runtime.pathStrict": true
+}

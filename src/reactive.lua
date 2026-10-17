@@ -51,11 +51,12 @@
   own doc comment for the exact deviation and why it was accepted.
 ]]
 
-local dep_module = require("reactive.dep")
-local effect = require("reactive.effect")
-local ref_module = require("reactive.ref")
+local dep_module = require("dep")
+local effect = require("effect")
+local ref_module = require("ref")
 
 local M = {}
+---@cast M Reactive.ReactiveModule
 
 -- ===========================================================================
 -- targetMap: raw table -> { [key] = Dep }
@@ -69,10 +70,12 @@ local M = {}
 -- weak-key semantics already achieve exactly that (the whole
 -- raw->depsForRaw entry goes away together once raw is unreferenced).
 -- ported from dep.ts's `targetMap`
+---@type table<table, table<any, Reactive.Dependency>>
 local targetMap = setmetatable({}, { __mode = "k" })
 
 -- proxy table -> raw backing table (so toRaw() is O(1))
 -- Also weak-keyed for the same reason as targetMap.
+---@type table<Reactive.ReactiveProxy, table>
 local rawMap = setmetatable({}, { __mode = "k" })
 
 -- raw table -> proxy table (so reactive(sameTable) returns the SAME
@@ -85,12 +88,17 @@ local rawMap = setmetatable({}, { __mode = "k" })
 -- single shared map keyed only by raw table would collide between
 -- variants. Which map a given raw table's proxy lives in is chosen by
 -- `(isReadonlyVariant, isShallowVariant)` -- see M.createReactiveObject().
+---@type table<table, Reactive.ReactiveProxy>
 local proxyMap = setmetatable({}, { __mode = "k" })
+---@type table<table, Reactive.ReactiveProxy>
 local shallowReactiveProxyMap = setmetatable({}, { __mode = "k" })
+---@type table<table, Reactive.ReactiveProxy>
 local readonlyProxyMap = setmetatable({}, { __mode = "k" })
+---@type table<table, Reactive.ReactiveProxy>
 local shallowReadonlyProxyMap = setmetatable({}, { __mode = "k" })
 
 -- set of raw tables marked via markRaw() -- never wrapped
+---@type table<table, boolean>
 local skipSet = setmetatable({}, { __mode = "k" })
 
 -- proxy table -> true, for proxies that are readonly/shallow variants.
@@ -100,16 +108,15 @@ local skipSet = setmetatable({}, { __mode = "k" })
 -- see M.createReactiveObject()'s doc comment for why one shared
 -- metatable with per-instance flags was chosen over mirroring Vue's
 -- four-handlers-object structure exactly.
+---@type table<Reactive.ReactiveProxy, boolean>
 local readonlySet = setmetatable({}, { __mode = "k" })
+---@type table<Reactive.ReactiveProxy, boolean>
 local shallowSet = setmetatable({}, { __mode = "k" })
 
 -- ===========================================================================
 -- free track() / trigger() -- ported from dep.ts
 -- ===========================================================================
 
--- Tracks access to `target[key]`. Creates the target's key->Dep map and
--- the specific key's Dep on first access.
--- ported from dep.ts's free function `track()`
 local function track(target, key)
   if not (effect.shouldTrack and effect.activeSub) then
     return
@@ -132,18 +139,18 @@ M.track = track
 
 -- Trigger types, mirroring constants.ts's TriggerOpTypes (subset --
 -- CLEAR has no meaning without collection types).
+---@type Reactive.TriggerOpTypes
 M.TriggerOpTypes = {
-  SET = "set",
   ADD = "add",
   DELETE = "delete",
+  SET = "set",
 }
 
--- Notifies subscribers of `target[key]`, and (for ADD/DELETE) also the
--- target's ITERATE_KEY subscribers -- effects that iterated the whole
--- table (once M.pairs()/iteration tracking exists, see "Known
--- limitations") need to re-run when a key is added or removed, not
--- just when an existing key's value changes.
--- ported from dep.ts's free function `trigger()`
+---@alias Reactive.TriggerOpType
+---| '"add"' # A previously-absent key was assigned.
+---| '"delete"' # A key was removed (raw[key] = nil).
+---| '"set"' # An existing key was assigned a new value.
+
 local function trigger(target, triggerType, key)
   local depsForTarget = targetMap[target]
   if not depsForTarget then
@@ -171,10 +178,6 @@ local function trigger(target, triggerType, key)
 end
 M.trigger = trigger
 
--- Sentinel key used for "whole-table iteration" deps. Read side: both
--- __pairs and __len track() against this key (see below). Write side:
--- trigger() (above) already forwarded ADD/DELETE to it since v1.
--- ported from dep.ts's `ITERATE_KEY`
 M.ITERATE_KEY = setmetatable({}, { __tostring = function() return "<reactive iterate key>" end })
 
 -- ===========================================================================
@@ -367,39 +370,45 @@ ReactiveProxy.__len = function(proxyTbl)
   return #raw
 end
 
--- Shared factory behind all four public constructors below --
--- ported from reactive.ts's `createReactiveObject()`, adapted to this
--- project's single-shared-metatable design (see ReactiveProxy's own
--- doc comment above for why): `isReadonlyVariant`/`isShallowVariant`
--- pick which of the four proxyMaps to dedup against and record the
--- new proxy's flags into readonlySet/shallowSet, rather than picking
--- one of four separate handler tables the way Vue's own
--- createReactiveObject(target, isReadonly, baseHandlers, ..., proxyMap)
--- does.
---
--- Note on re-wrapping: unlike Vue, this does NOT special-case
--- "wrapping an already-reactive target in readonly() should still
--- proceed" vs. "wrapping an already-readonly target in reactive()
--- should return it as-is" -- Vue's real createReactiveObject has a
--- specific early-out for exactly one direction (readonly(reactive(x))
--- proceeds; reactive(readonly(x)) returns the readonly proxy
--- unchanged, since you can't un-readonly something). This project
--- keeps it simpler: `rawMap[target] ~= nil` (this target IS SOME
--- proxy, any variant) always short-circuits to returning `target`
--- itself unchanged, regardless of which variant is being requested.
--- Concretely: `reactive(readonly(x))` returns the readonly proxy as
--- Vue does, but so does `readonly(reactive(x))` -- which is NOT what
--- Vue does (Vue would give you a genuine readonly wrapper around the
--- reactive proxy there). Deliberate simplification: composing
--- variants this way is an edge case this project has no concrete need
--- for yet, and getting the four-way composition matrix exactly right
--- (which variant wins, in which order) is real design work with its
--- own test surface -- not worth building speculatively. If this
--- project ever needs `readonly(reactive(x))` to behave exactly like
--- Vue's, that's a deliberate, separate follow-up, not something to
--- guess at now. Passing a table that's ALREADY the exact variant being
--- requested (e.g. `reactive(someReactiveProxy)`) still works correctly
--- either way, since that's what the early-out is actually for.
+--- Shared factory behind all four public constructors below --
+--- ported from reactive.ts's `createReactiveObject()`, adapted to this
+--- project's single-shared-metatable design (see ReactiveProxy's own
+--- doc comment above for why): `isReadonlyVariant`/`isShallowVariant`
+--- pick which of the four proxyMaps to dedup against and record the
+--- new proxy's flags into readonlySet/shallowSet, rather than picking
+--- one of four separate handler tables the way Vue's own
+--- createReactiveObject(target, isReadonly, baseHandlers, ..., proxyMap)
+--- does.
+---
+--- Note on re-wrapping: unlike Vue, this does NOT special-case
+--- "wrapping an already-reactive target in readonly() should still
+--- proceed" vs. "wrapping an already-readonly target in reactive()
+--- should return it as-is" -- Vue's real createReactiveObject has a
+--- specific early-out for exactly one direction (readonly(reactive(x))
+--- proceeds; reactive(readonly(x)) returns the readonly proxy
+--- unchanged, since you can't un-readonly something). This project
+--- keeps it simpler: `rawMap[target] ~= nil` (this target IS SOME
+--- proxy, any variant) always short-circuits to returning `target`
+--- itself unchanged, regardless of which variant is being requested.
+--- Concretely: `reactive(readonly(x))` returns the readonly proxy as
+--- Vue does, but so does `readonly(reactive(x))` -- which is NOT what
+--- Vue does (Vue would give you a genuine readonly wrapper around the
+--- reactive proxy there). Deliberate simplification: composing
+--- variants this way is an edge case this project has no concrete need
+--- for yet, and getting the four-way composition matrix exactly right
+--- (which variant wins, in which order) is real design work with its
+--- own test surface -- not worth building speculatively. If this
+--- project ever needs `readonly(reactive(x))` to behave exactly like
+--- Vue's, that's a deliberate, separate follow-up, not something to
+--- guess at now. Passing a table that's ALREADY the exact variant being
+--- requested (e.g. `reactive(someReactiveProxy)`) still works correctly
+--- either way, since that's what the early-out is actually for.
+---@param target table
+---@param isReadonlyVariant any
+---@param isShallowVariant any
+---@param variantProxyMap table<table, Reactive.ReactiveProxy>
+---@return Reactive.ReactiveProxy
+---@overload fun(target: any): any
 local function createReactiveObject(target, isReadonlyVariant, isShallowVariant, variantProxyMap)
   if type(target) ~= "table" then
     return target
@@ -418,6 +427,7 @@ local function createReactiveObject(target, isReadonlyVariant, isShallowVariant,
     return existingProxy
   end
 
+  ---@type Reactive.ReactiveProxy
   local proxy = setmetatable({}, ReactiveProxy)
   rawMap[proxy] = target
   variantProxyMap[target] = proxy
@@ -454,27 +464,14 @@ function M.isReadonly(value)
   return type(value) == "table" and readonlySet[value] == true
 end
 
--- True if `value` is specifically a shallowReactive() or
--- shallowReadonly() proxy.
--- ported from reactive.ts's `isShallow()` (the reactive.lua-side one --
--- ref.lua has its own isShallow() for shallowRef(), a separate check
--- against a separate flag on a separate object shape; no collision
--- since they check different types of values, but worth noting both
--- exist)
 function M.isShallow(value)
   return type(value) == "table" and shallowSet[value] == true
 end
 
--- True for a reactive-family proxy of ANY variant -- alias for
--- isReactive() here (this project's isReactive() doesn't have Vue's
--- own isReactive()/isProxy() distinction -- see isReactive()'s doc
--- comment above).
--- ported from reactive.ts's `isProxy()`
+
 M.isProxy = M.isReactive
 
--- Returns the raw backing table of a reactive-family proxy (any
--- variant), or `value` unchanged if it isn't one.
--- ported from reactive.ts's `toRaw()`
+
 function M.toRaw(value)
   if type(value) == "table" and rawMap[value] ~= nil then
     return M.toRaw(rawMap[value])
@@ -482,9 +479,6 @@ function M.toRaw(value)
   return value
 end
 
--- Marks a table so reactive()/shallowReactive()/readonly()/
--- shallowReadonly() never wrap it. Returns the table itself.
--- ported from reactive.ts's `markRaw()`
 function M.markRaw(value)
   if type(value) == "table" then
     skipSet[value] = true
@@ -492,10 +486,6 @@ function M.markRaw(value)
   return value
 end
 
--- Returns a reactive proxy of `value` if it's a table, else `value`
--- unchanged. Used internally where Vue calls toReactive() (e.g.
--- ref.lua's RefImpl constructor/setter, for a non-shallow ref).
--- ported from reactive.ts's `toReactive`
 function M.toReactive(value)
   if type(value) == "table" then
     return M.reactive(value)

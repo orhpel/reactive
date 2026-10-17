@@ -11,9 +11,10 @@
   something that needs to happen automatically at GC time).
 ]]
 
-local dep_module = require("reactive.dep")
+local dep_module = require("dep")
 
 local M = {}
+---@cast M Reactive.EffectModule
 
 -- scope.lua requires THIS file (reactive.effect) at module top level
 -- (ReactiveEffect.new() is what an EffectScope actually collects), so
@@ -28,7 +29,7 @@ local M = {}
 local scope_module = nil
 local function getScopeModule()
   if not scope_module then
-    scope_module = require("reactive.scope")
+    scope_module = require("scope")
   end
   return scope_module
 end
@@ -53,29 +54,21 @@ local EffectFlags = M.EffectFlags
 -- module-level tracking state
 -- ===========================================================================
 
--- the Subscriber currently running (effect or computed), or nil
--- ported from effect.ts's `activeSub`
 M.activeSub = nil
 
--- whether dep access should currently be tracked at all
--- ported from effect.ts's `shouldTrack`
 M.shouldTrack = true
 local trackStack = {}
 
--- Temporarily pauses tracking; must be paired with a later resetTracking().
 function M.pauseTracking()
   trackStack[#trackStack + 1] = M.shouldTrack
   M.shouldTrack = false
 end
 
--- Re-enables tracking; must be paired with a later resetTracking().
 function M.enableTracking()
   trackStack[#trackStack + 1] = M.shouldTrack
   M.shouldTrack = true
 end
 
--- Restores whatever tracking state was active before the last
--- pauseTracking()/enableTracking() call.
 function M.resetTracking()
   local n = #trackStack
   if n == 0 then
@@ -94,11 +87,6 @@ local batchDepth = 0
 local batchedSub = nil
 local batchedComputed = nil
 
---- Queues a subscriber to be notified once the outermost batch ends.
---- isComputed: computed subscribers are queued separately and flushed
---- first (their NOTIFIED flag just gets cleared, they don't "trigger" --
---- a computed only recomputes lazily on next .value read).
---- ported from effect.ts's `batch()`
 function M.batch(sub, isComputed)
   sub.flags = sub.flags | EffectFlags.NOTIFIED
   if isComputed then
@@ -110,13 +98,10 @@ function M.batch(sub, isComputed)
   batchedSub = sub
 end
 
--- ported from effect.ts's `startBatch()`
 function M.startBatch()
   batchDepth = batchDepth + 1
 end
 
--- Runs batched effects once all nested batches have ended.
--- ported from effect.ts's `endBatch()`
 function M.endBatch()
   batchDepth = batchDepth - 1
   if batchDepth > 0 then
@@ -176,10 +161,10 @@ local function prepareDeps(sub)
   end
 end
 
--- After a run, removes any dep links that stayed unconfirmed (version
--- still -1, meaning that dep wasn't read this run) from both linked
--- lists, and restores each dep's previous activeLink.
--- ported from effect.ts's `cleanupDeps()`
+--- After a run, removes any dep links that stayed unconfirmed (version
+--- still -1, meaning that dep wasn't read this run) from both linked
+--- lists, and restores each dep's previous activeLink.
+---@param sub Reactive.Subscriber
 local function cleanupDeps(sub)
   local tail = sub.depsTail
   local link = tail
@@ -214,10 +199,6 @@ local function cleanupDeps(sub)
   sub.depsTail = tail
 end
 
---- Whether any of sub's deps changed since it last ran (or, for a dep
---- that belongs to a computed, whether that computed itself needs
---- refreshing first).
---- ported from effect.ts's `isDirty()`
 local function isDirty(sub)
   local link = sub.deps
   while link do
@@ -233,11 +214,6 @@ local function isDirty(sub)
 end
 M.isDirty = isDirty
 
--- Re-evaluates a computed if needed (its own deps changed, or it was
--- never evaluated). No-op if nothing relevant changed since last time.
--- ported from effect.ts's `refreshComputed()`
--- Requires `computed` to look like ref.lua's ComputedRefImpl: fields
--- flags, globalVersion, dep, deps, fn, value.
 function M.refreshComputed(computed)
   if computed.flags & EffectFlags.TRACKING ~= 0 and computed.flags & EffectFlags.DIRTY == 0 then
     return
@@ -290,8 +266,10 @@ end
 --- ported from effect.ts's `ReactiveEffect` class
 local ReactiveEffect = {}
 ReactiveEffect.__index = ReactiveEffect
+---@cast ReactiveEffect Reactive.ReactiveEffect
 M.ReactiveEffect = ReactiveEffect
 
+---@type table<Reactive.ReactiveEffect, boolean>
 local pausedEffects = setmetatable({}, { __mode = "k" }) -- weak-keyed set of paused-while-triggered effects
 
 --- ported from effect.ts's `ReactiveEffect` constructor, which pushes
@@ -299,6 +277,7 @@ local pausedEffects = setmetatable({}, { __mode = "k" }) -- weak-keyed set of pa
 --- see getScopeModule() above for why this is a lazy require instead of
 --- a top-level one.
 function ReactiveEffect.new(fn)
+  ---@type Reactive.ReactiveEffect
   local self = setmetatable({
     fn = fn,
     deps = nil,
@@ -330,10 +309,6 @@ function ReactiveEffect:resume()
   end
 end
 
--- Called by a Dep when one of this effect's deps changes. Queues the
--- effect into the current batch unless it's already queued or
--- currently running without allowing recursion.
--- ported from effect.ts's `ReactiveEffect:notify()`
 function ReactiveEffect:notify()
   if self.flags & EffectFlags.RUNNING ~= 0 and self.flags & EffectFlags.ALLOW_RECURSE == 0 then
     return
@@ -343,6 +318,7 @@ function ReactiveEffect:notify()
   end
 end
 
+---@param e Reactive.ReactiveEffect
 local function cleanupEffect(e)
   local cleanupFn = e.cleanupFn
   e.cleanupFn = nil
@@ -356,9 +332,6 @@ local function cleanupEffect(e)
   end
 end
 
--- Runs fn with this effect as the active subscriber, tracking every
--- dep it reads. Returns fn's return value.
--- ported from effect.ts's `ReactiveEffect:run()`
 function ReactiveEffect:run()
   if self.flags & EffectFlags.ACTIVE == 0 then
     -- stopped -- just run fn without any tracking
@@ -386,8 +359,6 @@ function ReactiveEffect:run()
   return result
 end
 
--- Stops the effect: unlinks it from all its deps and marks it inactive.
--- ported from effect.ts's `ReactiveEffect:stop()`
 function ReactiveEffect:stop()
   if not (self.flags & EffectFlags.ACTIVE ~= 0) then return end
   local link = self.deps
@@ -404,9 +375,6 @@ function ReactiveEffect:stop()
   self.flags = self.flags & ~EffectFlags.ACTIVE
 end
 
--- Called when a dep this effect subscribes to changes. Runs the
--- scheduler if one is set, otherwise re-runs the effect if it's dirty.
--- ported from effect.ts's `ReactiveEffect:trigger()`
 function ReactiveEffect:trigger()
   if self.flags & EffectFlags.PAUSED ~= 0 then
     pausedEffects[self] = true
@@ -431,12 +399,8 @@ end
 -- public effect() / stop() API
 -- ===========================================================================
 
---- Creates and immediately runs a ReactiveEffect wrapping fn. Returns a
---- runner: calling it re-runs fn (still tracked); runner.effect gives
---- access to the underlying ReactiveEffect (for :stop(), :pause(), etc).
---- options: optional table, may set `scheduler`.
---- ported from effect.ts's `effect()`
 function M.effect(fn, options)
+  ---@type Reactive.ReactiveEffect
   local e = ReactiveEffect.new(fn)
   if options then
     if options.scheduler ~= nil then
@@ -464,17 +428,15 @@ function M.effect(fn, options)
   return runner
 end
 
--- Stops the effect associated with a runner returned by M.effect().
 function M.stop(runner)
   runner.effect:stop()
 end
 
--- Registers a cleanup function on the currently running effect. Called
--- right before the next run, or when the effect is stopped.
--- ported from effect.ts's `onEffectCleanup()`
 function M.onEffectCleanup(fn, failSilently)
-  if M.activeSub and getmetatable(M.activeSub) == ReactiveEffect then
-    M.activeSub.cleanupFn = fn
+  local sub = M.activeSub
+  if sub and getmetatable(sub) == ReactiveEffect then
+    ---@cast sub Reactive.ReactiveEffect
+    sub.cleanupFn = fn
   elseif not failSilently then
     error("onEffectCleanup() was called when there was no active effect to associate with.", 2)
   end

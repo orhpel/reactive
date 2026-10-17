@@ -25,9 +25,97 @@
 
 local M = {}
 
--- Incremented on every reactive change. Gives computed a fast path to
--- skip re-evaluation when nothing at all has changed since it last ran.
--- ported from dep.ts's `globalVersion`
+---@cast M Reactive.DepModule
+
+-- ===========================================================================
+-- internal helpers
+-- ===========================================================================
+
+---Metatable that delegates table calls to a constructor function.
+local __constructable = {
+  __call = function(self, ...)
+    if type(self.new) == "function" then
+      return self.new(...)
+    else
+      error("table has no constructor-function. function \"new()\" not found.")
+    end
+  end
+}
+
+--- Registers a link as an active subscriber of its dep (appends to the
+--- dep's subscriber list). If the dep belongs to a computed that just
+--- got its first subscriber, also (re)enables tracking on that computed
+--- and eagerly subscribes it to all of ITS OWN deps -- this is what lets
+--- a chain of computed-depending-on-computed propagate notifications
+--- correctly once someone is actually listening.
+--- ported from dep.ts's free function `addSub()`
+---@param link Reactive.Link
+local function addSub(link)
+  local effect = require("effect")
+  local dep = link.dep
+  dep.sc = dep.sc + 1
+
+  if link.sub.flags & effect.EffectFlags.TRACKING ~= 0 then
+    local computed = dep.computed
+    if computed and not dep.subs then
+      computed.flags = computed.flags | effect.EffectFlags.TRACKING | effect.EffectFlags.DIRTY
+      local l = computed.deps
+      while l do
+        addSub(l)
+        l = l.nextDep
+      end
+    end
+
+    local currentTail = dep.subs
+    if currentTail ~= link then
+      link.prevSub = currentTail
+      if currentTail then
+        currentTail.nextSub = link
+      end
+    end
+
+    dep.subs = link
+  end
+end
+
+function M.removeSub(link, soft)
+  local dep = link.dep
+  local prevSub = link.prevSub
+  local nextSub = link.nextSub
+
+  if prevSub then
+    prevSub.nextSub = nextSub
+    link.prevSub = nil
+  end
+  if nextSub then
+    nextSub.prevSub = prevSub
+    link.nextSub = nil
+  end
+
+  if dep.subs == link then
+    dep.subs = prevSub
+
+    if not prevSub and dep.computed then
+      local effect = require("effect")
+      dep.computed.flags = dep.computed.flags & ~effect.EffectFlags.TRACKING
+      local l = dep.computed.deps
+      while l do
+        M.removeSub(l, true)
+        l = l.nextDep
+      end
+    end
+  end
+
+  if not soft then
+    dep.sc = dep.sc - 1
+    if dep.sc == 0 and dep.map then
+      -- property dep has no more subscribers -- drop it from its
+      -- owning map so it can be garbage collected
+      dep.map[dep.key] = nil
+    end
+  end
+end
+
 M.globalVersion = 0
 
 -- ===========================================================================
@@ -36,8 +124,9 @@ M.globalVersion = 0
 
 local Link = {}
 Link.__index = Link
+---@cast Link Reactive.Link
 
-local function newLink(sub, dep)
+function Link.new(sub, dep)
   return setmetatable({
     sub = sub,
     dep = dep,
@@ -56,14 +145,18 @@ local function newLink(sub, dep)
   }, Link)
 end
 
+setmetatable(Link, __constructable)
+
+
+
 -- ===========================================================================
 -- Dep
 -- ===========================================================================
 
 local Dep = {}
+---@cast Dep Reactive.Dependency
 Dep.__index = Dep
 M.Dep = Dep
-
 
 function Dep.new(computed)
   return setmetatable({
@@ -83,12 +176,8 @@ function Dep.new(computed)
   }, Dep)
 end
 
---- Records that the current active subscriber (effect.activeSub) reads
---- this dep. Returns the Link, or nil if there's nothing to track
---- against (no active subscriber, tracking paused, or self-reference).
---- ported from dep.ts's `Dep:track()`
 function Dep:track()
-  local effect = require("reactive.effect")
+  local effect = require("effect")
   local activeSub = effect.activeSub
   if not activeSub or not effect.shouldTrack or activeSub == self.computed then
     return nil
@@ -96,7 +185,7 @@ function Dep:track()
 
   local link = self.activeLink
   if link == nil or link.sub ~= activeSub then
-    link = newLink(activeSub, self)
+    link = Link(activeSub, self)
     self.activeLink = link
 
     -- append to activeSub's dep list (as new tail)
@@ -145,7 +234,7 @@ function Dep:trigger()
 end
 
 function Dep:notify()
-  local effect = require("reactive.effect")
+  local effect = require("effect")
   effect.startBatch()
   local ok, err = pcall(function()
     local link = self.subs
@@ -165,84 +254,8 @@ function Dep:notify()
   end
 end
 
--- ===========================================================================
--- internal helpers
--- ===========================================================================
-
---- Registers a link as an active subscriber of its dep (appends to the
---- dep's subscriber list). If the dep belongs to a computed that just
---- got its first subscriber, also (re)enables tracking on that computed
---- and eagerly subscribes it to all of ITS OWN deps -- this is what lets
---- a chain of computed-depending-on-computed propagate notifications
---- correctly once someone is actually listening.
---- ported from dep.ts's free function `addSub()`
-function addSub(link)
-  local effect = require("reactive.effect")
-  local dep = link.dep
-  dep.sc = dep.sc + 1
-
-  if link.sub.flags & effect.EffectFlags.TRACKING ~= 0 then
-    local computed = dep.computed
-    if computed and not dep.subs then
-      computed.flags = computed.flags | effect.EffectFlags.TRACKING | effect.EffectFlags.DIRTY
-      local l = computed.deps
-      while l do
-        addSub(l)
-        l = l.nextDep
-      end
-    end
-
-    local currentTail = dep.subs
-    if currentTail ~= link then
-      link.prevSub = currentTail
-      if currentTail then
-        currentTail.nextSub = link
-      end
-    end
-
-    dep.subs = link
-  end
-end
-
-function M.removeSub(link, soft)
-  local dep = link.dep
-  local prevSub = link.prevSub
-  local nextSub = link.nextSub
-
-  if prevSub then
-    prevSub.nextSub = nextSub
-    link.prevSub = nil
-  end
-  if nextSub then
-    nextSub.prevSub = prevSub
-    link.nextSub = nil
-  end
-
-  if dep.subs == link then
-    dep.subs = prevSub
-
-    if not prevSub and dep.computed then
-      local effect = require("reactive.effect")
-      dep.computed.flags = dep.computed.flags & ~effect.EffectFlags.TRACKING
-      local l = dep.computed.deps
-      while l do
-        M.removeSub(l, true)
-        l = l.nextDep
-      end
-    end
-  end
-
-  if not soft then
-    dep.sc = dep.sc - 1
-    if dep.sc == 0 and dep.map then
-      -- property dep has no more subscribers -- drop it from its
-      -- owning map so it can be garbage collected
-      dep.map[dep.key] = nil
-    end
-  end
-end
+setmetatable(Dep, __constructable)
 
 M.Link = Link
-M.newLink = newLink
 
 return M

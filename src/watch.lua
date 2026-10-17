@@ -126,12 +126,12 @@
   meaningful).
 ]]
 
-local dep_module = require("reactive.dep")
-local effect = require("reactive.effect")
-local ref_module = require("reactive.ref")
-local reactive_module = require("reactive.reactive")
+local effect = require("effect")
+local ref_module = require("ref")
+local reactive_module = require("reactive")
 
 local M = {}
+---@cast M Reactive.WatchModule
 
 -- ===========================================================================
 -- cleanup registration (onWatcherCleanup equivalent)
@@ -140,7 +140,7 @@ local M = {}
 -- effect (ReactiveEffect) -> array of cleanup functions registered
 -- during that effect's most recent run. Weak-keyed so a stopped/
 -- unreferenced watcher's cleanup list doesn't outlive it.
--- ported from watch.ts's `cleanupMap`
+---@type table<Reactive.ReactiveEffect, Reactive.CleanupFn[]>
 local cleanupMap = setmetatable({}, { __mode = "k" })
 
 -- The watcher (ReactiveEffect) currently running its getter/callback,
@@ -148,14 +148,9 @@ local cleanupMap = setmetatable({}, { __mode = "k" })
 -- callback runs OUTSIDE of the getter's tracked run (see M.watch()'s
 -- `job` function), so onCleanup() needs its own notion of "which
 -- watcher is this cleanup for" that isn't just effect.activeSub.
--- ported from watch.ts's `activeWatcher`
+---@type Reactive.ReactiveEffect?
 local activeWatcher = nil
 
--- Registers a cleanup callback against `owner` (defaults to the
--- currently-running watcher). Called right before that watcher's next
--- run, or when it's stopped. failSilently: if true, do nothing (no
--- error) when there's no active watcher to attach to.
--- ported from watch.ts's `onWatcherCleanup()`
 function M.onWatcherCleanup(cleanupFn, failSilently, owner)
   owner = owner or activeWatcher
   if owner then
@@ -170,13 +165,14 @@ function M.onWatcherCleanup(cleanupFn, failSilently, owner)
   end
 end
 
+--- Runs the cleanup-callbacks of the given reactive-effect.
+---@param watcherEffect Reactive.ReactiveEffect
 local function runCleanups(watcherEffect)
   local cleanups = cleanupMap[watcherEffect]
-  if cleanups then
-    cleanupMap[watcherEffect] = nil
-    for _, cleanupFn in ipairs(cleanups) do
-      cleanupFn()
-    end
+  if cleanups then return end
+  cleanupMap[watcherEffect] = nil
+  for _, cleanupFn in ipairs(cleanups) do
+    cleanupFn()
   end
 end
 
@@ -184,50 +180,10 @@ end
 -- nil" -- Lua's nil can't tell those apart on its own, same problem
 -- Vue's INITIAL_WATCHER_VALUE solves in JS (there, `undefined` has the
 -- analogous ambiguity against a real undefined result).
--- ported from watch.ts's `INITIAL_WATCHER_VALUE`
 local INITIAL_WATCHER_VALUE = setmetatable({}, {
   __tostring = function() return "<watch initial value sentinel>" end,
 })
 
--- ===========================================================================
--- traverse() -- the "deep" mechanism
--- ===========================================================================
-
--- Recursively reads `value` (and everything reachable from it) so that
--- effect.lua's tracking machinery notices every key touched along the
--- way -- this IS what "deep" means here, see this file's header
--- comment for the full explanation and the reactive()-source caveat.
---
--- Simpler than Vue's traverse() (no Array/Map/Set special-casing --
--- see reactive.lua's "one table type" decision): a ref is followed
--- into its .value; anything else table-shaped is walked key by key
--- via pairs() (which itself is enough to trigger reactive.lua's
--- __pairs tracking IF the table is a reactive() proxy -- a plain,
--- non-reactive Lua table just gets walked with no tracking effect,
--- same as reading a plain value does nothing for effect.lua).
--- `seen` (a table used as a set) guards against infinite recursion on
--- cyclic structures -- same purpose as Vue's `Set` parameter.
---
--- `depth`: how many levels below `value` itself still get descended
--- into. `value` itself is always read (that's depth-independent --
--- matches Vue: even `deep: 0`/`deep: false` still reads the root
--- value once, it just never DESCENDS). `depth = nil` means unlimited
--- (== `deep = true`). `depth = 0` means "read value's own keys (via
--- pairs(), which is what actually triggers reactive.lua's
--- __pairs/ITERATE_KEY tracking for a reactive() value -- see
--- reactive.lua's docs), but do NOT recurse into any of THEIR values."
--- `depth = -1` (only ever reached internally, via depth - 1 recursion
--- -- never pass this in directly) means "don't even read this value's
--- own keys," which only matters for grandchildren-and-beyond once
--- depth has been exhausted. See M.watch()'s `deep` handling below for
--- how a plain boolean/nil `deep` option maps to a depth here, and
--- docs/watch.lua.md for why the counting convention was chosen this
--- way (deliberately NOT a straight Vue port: this project's `traverse`
--- has no array/child-index distinction to make Vue's depth semantics
--- necessary in the first place, so depth was defined to align with
--- OUR own recursion instead of importing Vue's convention unchanged).
--- ported from watch.ts's `traverse()`, with a depth-limit parameter of
--- our own definition rather than Vue's
 local function traverse(value, depth, seen)
   if type(value) ~= "table" then
     return value
@@ -272,19 +228,6 @@ local function traverse(value, depth, seen)
 end
 M.traverse = traverse
 
--- Normalizes the `deep` option into a depth value for traverse():
--- `nil`/`false` -> 0 (no descent, root read only)
--- `true` -> nil (unlimited depth, matches Vue's `deep: true`)
--- a non-negative number N -> N (N levels of descent below the root)
--- a negative number -> error. A negative depth has no sensible meaning
--- under this file's own counting convention (0 already means "root
--- only, no descent" -- there's no smaller unit than that to express),
--- so this is a caller mistake to report loudly rather than silently
--- clamp to 0 or otherwise guess what was meant.
--- ported loosely from watch.ts's own normalizeDeep-equivalent inline
--- logic in doWatch(), adapted for this project's own depth convention
--- (see traverse()'s doc comment above for why the convention itself
--- differs from Vue's)
 local function normalizeDeep(deep)
   if deep == true then
     return nil
@@ -324,15 +267,6 @@ local function buildGetter(source)
   end
 end
 
--- Watches `source` for changes, running `cb(newValue, oldValue, onCleanup)`
--- when it changes. `source` is a ref, a computed, or a zero-arg getter
--- function. `options` (optional): `immediate` (run cb once immediately,
--- with oldValue = nil), `once` (auto-stop after the first cb run).
--- Returns a WatchHandle: callable to stop, plus `.pause()`/`.resume()`/
--- `.stop()` methods (`.stop()` and calling the handle directly do the
--- same thing, matching Vue's API shape).
--- ported from watch.ts's `watch()`, heavily simplified -- see this
--- file's header comment for exactly what was cut and why.
 function M.watch(source, cb, options)
   options = options or {}
   local getter, isSourceReactive = buildGetter(source)
@@ -474,15 +408,6 @@ end
 -- watchEffect()
 -- ===========================================================================
 
--- Runs `fn(onCleanup)` immediately, tracking whatever reactive state it
--- reads, and re-runs it whenever any of that state changes. Unlike
--- watch(), there's no separate source/callback split, no old/new value
--- comparison -- fn itself IS the effect. Returns the same kind of
--- WatchHandle as watch().
--- ported from watch.ts's implicit "no cb" branch of watch() (Vue
--- exposes this as a distinct watchEffect() export from runtime-core,
--- not from reactivity itself -- reimplemented directly here since this
--- project has no separate runtime-core layer to house it in).
 function M.watchEffect(fn, options)
   options = options or {}
   local watcherEffect

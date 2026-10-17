@@ -1,0 +1,4 @@
+{
+  "stylua.targetReleaseVersion": "latest",
+  "Lua.workspace.library": [ "${workspace}/types/" ]
+}

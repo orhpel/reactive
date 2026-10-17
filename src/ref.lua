@@ -28,10 +28,11 @@
   recognize the existing ref and would wrongly re-wrap it).
 ]]
 
-local dep_module = require("reactive.dep")
-local effect = require("reactive.effect")
+local dep_module = require("dep")
+local effect = require("effect")
 
 local M = {}
+---@cast M Reactive.RefModule
 
 -- reactive.lua requires THIS file (reactive.ref) at module top level
 -- (for isRef() checks in its get/set traps), so this file cannot
@@ -44,7 +45,7 @@ local M = {}
 local reactive_module = nil
 local function getReactiveModule()
   if not reactive_module then
-    reactive_module = require("reactive.reactive")
+    reactive_module = require("reactive")
   end
   return reactive_module
 end
@@ -53,38 +54,18 @@ end
 -- ref()
 -- ===========================================================================
 
---- ported from ref.ts's `RefImpl` class
 local RefImpl = {}
 RefImpl.__index = RefImpl
 M.RefImpl = RefImpl
 
--- Creates a ref wrapping `value`. If `value` is already a ref, returns
--- it unchanged (matches Vue's createRef() early-out). Table values are
--- deep-wrapped via reactive.lua's toReactive(), same as Vue's RefImpl
--- constructor calling toReactive() -- so `ref({foo=1}).value.foo = 2`
--- is itself reactive, not just the top-level `.value` assignment.
--- ported from ref.ts's `ref()` / `createRef()`
 function M.ref(value)
   return M.createRef(value, false)
 end
 
--- Creates a ref wrapping `value`, but WITHOUT deep-wrapping table
--- values via toReactive() -- `.value` itself is still tracked/
--- triggered normally (assigning a whole new value re-triggers), but
--- mutating INTO a table value (`shallowRef({}).value.foo = 1`) does
--- NOT track/trigger, because the stored value is never wrapped in a
--- reactive() proxy in the first place. Use M.triggerRef() to force a
--- manual notification after such an in-place mutation -- same pattern
--- Vue documents for shallowRef.
--- ported from ref.ts's `shallowRef()`
 function M.shallowRef(value)
   return M.createRef(value, true)
 end
 
--- Shared constructor for ref()/shallowRef() -- both just call this with
--- a different `shallow` flag, mirroring Vue's own createRef(value,
--- shallow) helper (ref.ts) rather than duplicating the ref-check +
--- setmetatable logic twice.
 function M.createRef(value, shallow)
   if M.isRef(value) then
     return value
@@ -127,27 +108,23 @@ end
 -- works correctly for both shallow and deep refs without a separate
 -- branch for the comparison itself -- only the STORAGE differs.
 RefImpl.__newindex = function(self, key, newValue)
-  if key == "value" then
-    local reactive_mod = getReactiveModule()
-    local oldValue = rawget(self, "_value")
-    local rawOld = reactive_mod.toRaw(oldValue)
-    local rawNew = reactive_mod.toRaw(newValue)
-    if rawNew ~= rawOld then
-      if rawget(self, "_shallow") then
-        rawset(self, "_value", newValue)
-      else
-        rawset(self, "_value", reactive_mod.toReactive(newValue))
-      end
-      self.dep:trigger()
-    end
+  if key ~= "value" then
+    rawset(self, key, newValue)
     return
   end
-  rawset(self, key, newValue)
+  local reactive_mod = getReactiveModule()
+  local oldValue = rawget(self, "_value")
+  local rawOld = reactive_mod.toRaw(oldValue)
+  local rawNew = reactive_mod.toRaw(newValue)
+  if rawNew == rawOld then return end
+  if rawget(self, "_shallow") then
+    rawset(self, "_value", newValue)
+  else
+    rawset(self, "_value", reactive_mod.toReactive(newValue))
+  end
+  self.dep:trigger()
 end
 
--- Checks whether `r` is a ref created by M.ref(), M.shallowRef(),
--- M.computed(), or M.toRef() (either shape it can return).
--- ported from ref.ts's `isRef()`
 function M.isRef(r)
   if type(r) ~= "table" then
     return false
@@ -156,8 +133,6 @@ function M.isRef(r)
   return mt == RefImpl or mt == M.ComputedRefImpl or mt == M.ObjectRefImpl or mt == M.GetterRefImpl
 end
 
---- Returns r.value if r is a ref, otherwise returns r unchanged.
---- ported from ref.ts's `unref()`
 function M.unref(r)
   if M.isRef(r) then
     return r.value
@@ -165,19 +140,10 @@ function M.unref(r)
   return r
 end
 
--- True if `r` is a ref created by M.shallowRef() specifically -- false
--- for a normal ref(), a computed(), an ObjectRefImpl/GetterRefImpl
--- (toRef()'s return types, neither of which has a `_shallow` field at
--- all, so this correctly falls through to `false` for them via rawget
--- returning nil), or any non-ref value.
--- ported from ref.ts's `isShallow()`
 function M.isShallow(r)
   return type(r) == "table" and rawget(r, "_shallow") == true
 end
 
---- Normalizes a ref, a plain value, or a getter function to a plain
---- value. Unlike unref(), also calls through zero-arg functions.
---- ported from ref.ts's `toValue()`
 function M.toValue(source)
   if type(source) == "function" then
     return source()
@@ -185,11 +151,6 @@ function M.toValue(source)
   return M.unref(source)
 end
 
---- Force-triggers a ref's subscribers even if the value didn't change
---- (e.g. after mutating a table stored in a ref in place, which
---- `hasChanged` wouldn't otherwise detect since the reference itself is
---- unchanged).
---- ported from ref.ts's `triggerRef()`
 function M.triggerRef(r)
   if M.isRef(r) and r.dep then
     r.dep:trigger()
@@ -200,18 +161,15 @@ end
 -- computed()
 -- ===========================================================================
 
--- ported from computed.ts's `ComputedRefImpl` class
 local ComputedRefImpl = {}
 ComputedRefImpl.__index = function(self, key)
-  if key == "value" then
-    local link = self.dep:track()
-    effect.refreshComputed(self)
-    if link then
-      link.version = self.dep.version
-    end
-    return rawget(self, "_value")
+  if key ~= "value" then return ComputedRefImpl[key] end
+  local link = self.dep:track()
+  effect.refreshComputed(self)
+  if link then
+    link.version = self.dep.version
   end
-  return ComputedRefImpl[key]
+  return rawget(self, "_value")
 end
 ComputedRefImpl.__newindex = function(self, key, newValue)
   if key == "value" then
@@ -226,12 +184,6 @@ ComputedRefImpl.__newindex = function(self, key, newValue)
 end
 M.ComputedRefImpl = ComputedRefImpl
 
--- Called by Dep:notify() when one of this computed's own deps changes.
--- Marks the computed dirty and, unless already queued (or this IS the
--- currently-running subscriber, which would be self-recursion),
--- schedules its OWN dep to be notified too. Returning true tells the
--- calling Dep:notify() to also notify this computed's dep directly.
--- ported from computed.ts's `ComputedRefImpl:notify()`
 function ComputedRefImpl:notify()
   self.flags = self.flags | effect.EffectFlags.DIRTY
   if self.flags & effect.EffectFlags.NOTIFIED == 0 and effect.activeSub ~= self then
@@ -240,10 +192,6 @@ function ComputedRefImpl:notify()
   end
 end
 
--- Creates a computed ref. `getterOrOptions` is either a function
--- `(oldValue) -> newValue`, or a table `{ get = fn, set = fn }` for a
--- writable computed.
--- ported from computed.ts's `computed()`
 function M.computed(getterOrOptions)
   local getter, setter
   if type(getterOrOptions) == "function" then
@@ -253,6 +201,7 @@ function M.computed(getterOrOptions)
     setter = getterOrOptions.set
   end
 
+  ---@type Reactive.ComputedRef
   local c = setmetatable({
     _value = nil,
     dep = nil, -- set below, needs `c` itself for Dep.new(computed)
@@ -285,37 +234,20 @@ end
 -- ported from ref.ts's `ObjectRefImpl` class
 local ObjectRefImpl = {}
 ObjectRefImpl.__index = function(self, key)
-  if key == "value" then
-    local source = rawget(self, "_source")
-    local sourceKey = rawget(self, "_key")
-    local value = source[sourceKey]
-    if value == nil then
-      return rawget(self, "_defaultValue")
-    end
-    return value
+  if key ~= "value" then return ObjectRefImpl[key] end
+  local value = rawget(self, "_source")[rawget(self, "_key")]
+  if value == nil then
+    return rawget(self, "_defaultValue")
   end
-  return ObjectRefImpl[key]
+  return value
 end
 ObjectRefImpl.__newindex = function(self, key, newValue)
-  if key == "value" then
-    local source = rawget(self, "_source")
-    local sourceKey = rawget(self, "_key")
-    source[sourceKey] = newValue
-    return
-  end
-  rawset(self, key, newValue)
+  if key ~= "value" then rawset(self, key, newValue) return end
+  rawget(self, "_source")[rawget(self, "_key")] = newValue
 end
 M.ObjectRefImpl = ObjectRefImpl
 
--- A readonly ref wrapping a zero-arg getter function -- `.value` calls
--- the getter fresh on every read (so tracking comes from whatever the
--- getter itself reads, exactly like a plain effect() body would),
--- writing errors (there's no setter to forward to, mirrors computed()
--- without a `set`). Simpler than Vue's GetterRefImpl, which wraps the
--- getter in an internal computed(); this project's version just calls
--- the getter directly on every access instead -- see docs/ref.lua.md
--- for why that's a deliberate simplification, not a behavioral gap.
--- ported from ref.ts's `GetterRefImpl` class
+
 local GetterRefImpl = {}
 GetterRefImpl.__index = function(self, key)
   if key == "value" then
@@ -331,15 +263,6 @@ GetterRefImpl.__newindex = function(self, key, newValue)
 end
 M.GetterRefImpl = GetterRefImpl
 
--- `toRef()` has three distinct shapes depending on what's passed,
--- mirroring ref.ts's own overload set (minus TS-only overload
--- resolution, which Lua has no equivalent of -- just runtime checks
--- here, in the same priority order Vue's own toRef() body uses):
---   toRef(existingRef)        -> returns it UNCHANGED (early-out)
---   toRef(getterFn)           -> M.GetterRefImpl (readonly)
---   toRef(source, key, [default]) -> M.ObjectRefImpl (linked to source[key])
---   toRef(plainValue)         -> same as M.ref(plainValue)
--- ported from ref.ts's `toRef()`
 function M.toRef(source, key, defaultValue)
   if M.isRef(source) then
     return source
@@ -369,15 +292,6 @@ function M.toRef(source, key, defaultValue)
   end
 end
 
--- Converts a reactive() table into a plain table of ObjectRefImpls,
--- one per key present at call time (NOT itself reactive to later key
--- add/remove on `source` -- matches Vue: toRefs() snapshots the KEY
--- SET once via a single pairs() pass, only each individual ref stays
--- linked to its own key going forward). Every value in the result is
--- itself a ref, built via M.toRef(source, key) -- so an existing ref
--- stored at a key is returned as-is (see toRef()'s own early-out),
--- same as Vue.
--- ported from ref.ts's `toRefs()`
 function M.toRefs(source)
   local toRef = M.toRef
   local result = {}
@@ -391,23 +305,6 @@ end
 -- proxyRefs()
 -- ===========================================================================
 
--- Wraps a plain table that may contain some ref-valued keys (typically
--- the return value of a "setup"-style function mixing plain values and
--- refs) in a proxy that auto-unwraps refs on read, and auto-forwards
--- writes into an existing ref's .value rather than replacing the ref
--- itself -- the same ref-forwarding behavior reactive.lua's own
--- __newindex already does for reactive() tables, applied here to a
--- PLAIN table via its own dedicated __index/__newindex pair (no
--- Dep/tracking machinery involved at all -- this is pure unwrap/
--- forward sugar, not a reactive() proxy).
---
--- If `objectWithRefs` is ALREADY a reactive() proxy, this is a no-op
--- that returns it unchanged: reactive.lua's own ReactiveProxy.__index
--- already auto-unwraps refs on read (see reactive.lua's __index), so
--- wrapping a reactive() proxy in ANOTHER unwrap layer would be
--- redundant -- matches Vue's own `isReactive(...) ? objectWithRefs :
--- new Proxy(...)` early-out in proxyRefs().
--- ported from ref.ts's `proxyRefs()`
 local ProxyRefsHandlers = {}
 ProxyRefsHandlers.__index = function(self, key)
   local target = rawget(self, "_target")

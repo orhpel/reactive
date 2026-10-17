@@ -1,0 +1,92 @@
+---@meta
+
+-- Public entry point: `require("reactive")`. Wires together
+-- dep/effect/ref/reactive/watch/scope and exposes their public
+-- functions under one flat namespace.
+
+---The flat, public API surface exposed by `require("reactive")`.
+---@class Reactive.PublicAPI
+-- ref.lua
+---Creates a reactive ref. Table values are deep-wrapped.
+---@field ref fun(value: any): any
+---Creates a shallow ref (no deep wrapping of table values).
+---@field shallowRef fun(value: any): Reactive.Ref
+---Creates a lazily-evaluated, cached computed ref.
+---@field computed fun(getterOrOptions: function|{get: function, set?: function}): Reactive.ComputedRef
+---True if the argument is a ref (ref/shallowRef/computed/toRef).
+---@field isRef fun(r: any): boolean
+---Returns r.value if r is a ref, otherwise r.
+---@field unref fun(r: any): any
+---Normalizes a ref/plain value/getter to a plain value.
+---@field toValue fun(source: any): any
+---Force-triggers a ref's subscribers.
+---@field triggerRef fun(r: Reactive.Ref|any)
+---See ref.toRef(). Three overload shapes.
+---@field toRef fun(source: any, key?: any, defaultValue?: any): any
+---Converts a reactive() table into a table of ObjectRefs, one per key.
+---@field toRefs fun(source: table): table<string, any>
+---Auto-unwrapping/forwarding proxy for tables that may contain refs.
+---@field proxyRefs fun(objectWithRefs: table): table
+-- effect.lua
+---Runs fn immediately, tracking its reactive reads and re-running on change. Returns a runner (callable to re-run; runner.effect exposes the effect).
+---@field effect fun(fn: function, options?: { scheduler?: fun(), onStop?: fun() }): Reactive.Runner
+---Stops the effect behind a runner.
+---@field stop fun(runner: Reactive.Runner)
+---Registers a cleanup against the currently running effect.
+---@field onEffectCleanup fun(fn: function, failSilently?: boolean)
+---Temporarily disables tracking (push/pop via resetTracking()).
+---@field pauseTracking fun()
+---Forces tracking on (push/pop via resetTracking()).
+---@field enableTracking fun()
+---Pops the tracking state pushed by pauseTracking()/enableTracking().
+---@field resetTracking fun()
+-- reactive.lua
+---Wraps a table in a deep, read/write reactive proxy.
+---@field reactive fun(target: any): any
+---Like reactive(), but only top-level keys are tracked/wrapped.
+---@field shallowReactive fun(target: any): any
+---Deep, read-only proxy. Writes error; reads do not track.
+---@field readonly fun(target: any): any
+---Combines readonly() and shallowReactive().
+---@field shallowReadonly fun(target: any): any
+---True for a proxy of any of the four variants.
+---@field isReactive fun(value: any): boolean
+---True specifically for readonly()/shallowReadonly().
+---@field isReadonly fun(value: any): boolean
+---True for any of the four reactive-family proxies (alias of isReactive).
+---@field isProxy fun(value: any): boolean
+---Returns the underlying raw table of a reactive-family proxy.
+---@field toRaw fun(value: any): any
+---Marks a table so it is never wrapped by the reactive-family constructors.
+---@field markRaw fun(value: any): any
+---reactive(value) if value is a table, otherwise value unchanged.
+---@field toReactive fun(value: any): any
+-- watch.lua
+---Watches a ref/reactive table/getter; invokes cb on change.
+---@field watch fun(source: any, cb: Reactive.WatchHandler): Reactive.WatchHandle
+---Runs fn immediately, tracking its reads and re-running on change.
+---@field watchEffect fun(fn: fun(onCleanup: Reactive.CleanupFn), options: Reactive.WatchEffectOptions?): Reactive.WatchHandle
+---Registers a cleanup against the currently-running watcher.
+---@field onWatcherCleanup fun(fn: function, failSilently: boolean?, owner: Reactive.ReactiveEffect?)
+-- scope.lua
+---Creates a new EffectScope, starting active.
+---@field effectScope fun(): Reactive.EffectScope
+---Returns the currently-running scope, or nil.
+---@field getCurrentScope fun(): Reactive.EffectScope?
+---Registers a callback to run when the active scope is stopped.
+---@field onScopeDispose fun(fn: function, failSilently?: boolean)
+-- combined
+---True for a shallowRef, shallowReactive, or shallowReadonly value.
+---@field isShallow fun(value: any): boolean
+---Advanced-use escape hatch: raw module references (dep/effect/ref/reactive/watch/scope).
+---@field internal {
+---  dep: Reactive.DepModule,
+---  effect: Reactive.EffectModule,
+---  ref: Reactive.RefModule,
+---  reactive: Reactive.ReactiveModule,
+---  watch: Reactive.WatchModule,
+---  scope: Reactive.ScopeModule,
+---}
+local M = {}
+
+return M
