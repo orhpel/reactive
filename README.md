@@ -74,3 +74,96 @@ end)
 count.value = 5   -- prints "count=5 doubled=10"
 count.value = 5   -- nothing happens. `count` didn't change. Good.
 count.value = 7   -- prints "count=7 doubled=14"
+```
+
+Not convinced? Here's `reactive()`:
+
+```lua
+local state = reactive.reactive({
+  user = { name = "Lephro", roles = { "admin" } },
+  ui   = { theme = "dark", fontSize = 14 },
+})
+
+reactive.effect(function()
+  print(("theme: %s"):format(state.ui.theme))
+end)
+
+state.ui.theme = "light"    -- effect re-runs
+state.ui.fontSize = 16      -- does NOT re-run (effect never read it)
+```
+
+That last line is the whole point: the effect tracks **exactly** what it
+reads, freshly discovered on every run. No "subscribe to the whole
+object and hope for the best."
+
+## Do you have more?
+
+Yes. In [docs/](docs/README.md) you'll find:
+
+- [ref() and effect()](docs/02-ref-and-effect.md) — the intro
+- [computed()](docs/03-computed.md) — lazy, cached, chainable
+- [reactive()](docs/04-reactive-objects.md) — deep proxies for your tables
+- [watch() and watchEffect()](docs/05-watch.md) — with the full `deep`
+  option spec
+- [Deep watching](docs/09-deep-watching.md) — why `deep = N` means what
+  it means
+- [Iteration details](docs/11-iteration-details.md) — what `pairs()`,
+  `#`, and `ipairs()` actually trigger
+- [Tracking control](docs/12-tracking-control.md) — the pause/enable/
+  reset trio
+- [effectScope()](docs/08-effect-scope.md) — disposal groups
+
+…and a [`docs/examples/`](docs/examples/README.md) folder with
+**runnable, real-world-shaped examples** showing the library in action
+beyond toy counters. More are landing as the project grows.
+
+## How does it compare to Vue's version?
+
+Feature | Vue 3 | reactive.lua
+--- | --- | ---
+`ref` / `computed` / `effect` | ✅ | ✅
+`reactive` / `readonly` / `shallow*` | ✅ | ✅
+`watch` / `watchEffect` | ✅ | ✅
+`effectScope` | ✅ (nested) | ✅ (flat only — [see why](docs/08-effect-scope.md))
+`toRef` / `toRefs` / `proxyRefs` | ✅ | ✅
+Collection handlers (`Map`/`Set`/etc.) | ✅ | ❌ (Lua has one table type)
+`customRef`, SSR helpers | ✅ | ❌ (not implemented)
+Virtual DOM, components, templates | ✅ | ❌ (never will be)
+
+The reactivity core is intentionally **faithful**; the framework around
+it is intentionally **absent**.
+
+## Installation
+
+Copy the `reactive/` directory into your project. That's it. No luarocks
+manifest, no build step, no dependency hell. It's pure Lua 5.4.
+
+```lua
+local reactive = require("reactive")
+```
+
+If you need type hints for your editor, the `.d.lua` files are already
+in place next to their modules. Point LuaLS at them (or just open the
+folder — they're auto-detected).
+
+## Requirements
+
+- **Lua 5.4** (uses native `&`, `|`, `<<` bitwise operators)
+- No external dependencies
+
+## Contributing
+
+Open an issue, open a PR, send a carrier pigeon. The docs in
+[`docs/`](docs/README.md) explain the design decisions and where the
+deliberate divergences from Vue are — read them before proposing
+"improvements" that break the design intent.
+
+## License
+
+MIT. Do whatever you want, just don't blame us if your refs get stuck
+in a dependency cycle. (They won't. But still.)
+
+---
+
+_If this library saved you from writing yet another observer pattern by
+hand: you're welcome. Go build something with it._
