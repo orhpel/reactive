@@ -123,27 +123,28 @@ function M.endBatch()
     return
   end
 
+  local e, nextE
   if batchedComputed then
-    local e = batchedComputed
+    e = batchedComputed
     batchedComputed = nil
     while e do
-      local nextE = e.nextBatch
+      nextE = e.nextBatch
       e.nextBatch = nil
       e.flags = e.flags & ~EffectFlags.NOTIFIED
       e = nextE
     end
   end
 
-  local firstError = nil
+  local err, firstError, ok
   while batchedSub do
-    local e = batchedSub
+    e = batchedSub
     batchedSub = nil
     while e do
-      local nextE = e.nextBatch
+      nextE = e.nextBatch
       e.nextBatch = nil
       e.flags = e.flags & ~EffectFlags.NOTIFIED
       if e.flags & EffectFlags.ACTIVE ~= 0 then
-        local ok, err = pcall(e.trigger, e)
+        ok, err = pcall(e.trigger, e)
         if not ok and not firstError then
           firstError = err
         end
@@ -180,19 +181,19 @@ end
 -- lists, and restores each dep's previous activeLink.
 -- ported from effect.ts's `cleanupDeps()`
 local function cleanupDeps(sub)
-  local head = nil
   local tail = sub.depsTail
   local link = tail
+  local head, prev, prevDep, nextDep
   while link do
-    local prev = link.prevDep
+    prev = link.prevDep
     if link.version == -1 then
       if link == tail then
         tail = prev
       end
       dep_module.removeSub(link)
       -- unlink from sub's own dep list too
-      local prevDep = link.prevDep
-      local nextDep = link.nextDep
+      prevDep = link.prevDep
+      nextDep = link.nextDep
       if prevDep then
         prevDep.nextDep = nextDep
         link.prevDep = nil
@@ -321,12 +322,11 @@ function ReactiveEffect:pause()
 end
 
 function ReactiveEffect:resume()
-  if self.flags & EffectFlags.PAUSED ~= 0 then
-    self.flags = self.flags & ~EffectFlags.PAUSED
-    if pausedEffects[self] then
-      pausedEffects[self] = nil
-      self:trigger()
-    end
+  if self.flags & EffectFlags.PAUSED == 0 then return end
+  self.flags = self.flags & ~EffectFlags.PAUSED
+  if pausedEffects[self] then
+    pausedEffects[self] = nil
+    self:trigger()
   end
 end
 
@@ -346,14 +346,13 @@ end
 local function cleanupEffect(e)
   local cleanupFn = e.cleanupFn
   e.cleanupFn = nil
-  if cleanupFn then
-    local prevSub = M.activeSub
-    M.activeSub = nil
-    local ok, err = pcall(cleanupFn)
-    M.activeSub = prevSub
-    if not ok then
-      error(err, 0)
-    end
+  if not cleanupFn then return end
+  local prevSub = M.activeSub
+  M.activeSub = nil
+  local ok, err = pcall(cleanupFn)
+  M.activeSub = prevSub
+  if not ok then
+    error(err, 0)
   end
 end
 
@@ -390,20 +389,19 @@ end
 -- Stops the effect: unlinks it from all its deps and marks it inactive.
 -- ported from effect.ts's `ReactiveEffect:stop()`
 function ReactiveEffect:stop()
-  if self.flags & EffectFlags.ACTIVE ~= 0 then
-    local link = self.deps
-    while link do
-      dep_module.removeSub(link)
-      link = link.nextDep
-    end
-    self.deps = nil
-    self.depsTail = nil
-    cleanupEffect(self)
-    if self.onStop then
-      self.onStop()
-    end
-    self.flags = self.flags & ~EffectFlags.ACTIVE
+  if not (self.flags & EffectFlags.ACTIVE ~= 0) then return end
+  local link = self.deps
+  while link do
+    dep_module.removeSub(link)
+    link = link.nextDep
   end
+  self.deps = nil
+  self.depsTail = nil
+  cleanupEffect(self)
+  if self.onStop then
+    self.onStop()
+  end
+  self.flags = self.flags & ~EffectFlags.ACTIVE
 end
 
 -- Called when a dep this effect subscribes to changes. Runs the
