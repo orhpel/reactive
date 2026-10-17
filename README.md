@@ -56,18 +56,21 @@ You get:
 
 ```lua
 local reactive = require("reactive")
+local ref      = reactive.ref
+local computed = reactive.computed
+local effect   = reactive.effect
 
 -- A plain old ref. Nothing fancy.
-local count = reactive.ref(0)
+local count = ref(0)
 
 -- A computed that depends on it. Lazily evaluated, cached, re-runs only
 -- when `count` actually changes.
-local doubled = reactive.computed(function() return count.value * 2 end)
+local doubled = computed(function() return count.value * 2 end)
 
 -- An effect that reads both. Runs once immediately, then again on every
 -- change — but only if `doubled` actually changed. It won't, unless
 -- `count` did. Caching! It's a thing!
-reactive.effect(function()
+effect(function()
   print(("count=%d doubled=%d"):format(count.value, doubled.value))
 end)
 
@@ -79,12 +82,16 @@ count.value = 7   -- prints "count=7 doubled=14"
 Not convinced? Here's `reactive()`:
 
 ```lua
-local state = reactive.reactive({
+-- `reactive.reactive` shares its name with the module itself, so we
+-- alias it locally. Any other name works — `_reactive`, `r`, `makeReactive`.
+local _reactive = reactive.reactive
+
+local state = _reactive({
   user = { name = "Lephro", roles = { "admin" } },
   ui   = { theme = "dark", fontSize = 14 },
 })
 
-reactive.effect(function()
+effect(function()
   print(("theme: %s"):format(state.ui.theme))
 end)
 
