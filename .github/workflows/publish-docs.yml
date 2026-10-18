@@ -1,6 +1,6 @@
 name: Publish docs
 on:
-  push:
+  pull_request:
     branches: [main]
     paths:
       - docs/**
