@@ -15,12 +15,12 @@ Grouped by topic, not by source file — so if you're looking for
 
 | File | Covers |
 |---|---|
-| [`ref`](ref.md) | `ref`, `shallowRef`, `isRef`, `isShallow`, `unref`, `toValue`, `triggerRef`, `toRef`, `toRefs`, `proxyRefs` |
-| [`computed`](computed.md) | `computed` |
-| [`reactive`](reactive.md) | `reactive`, `shallowReactive`, `readonly`, `shallowReadonly`, `isReactive`, `isReadonly`, `isShallow`, `isProxy`, `toRaw`, `markRaw`, `toReactive` |
-| [`effect`](effect.md) | `effect`, `stop`, `onEffectCleanup`, `pauseTracking`, `enableTracking`, `resetTracking` |
-| [`watch`](watch.md) | `watch`, `watchEffect`, `onWatcherCleanup` |
-| [`scope`](scope.md) | `effectScope`, `getCurrentScope`, `onScopeDispose` |
+| [`ref.md`](ref) | `ref`, `shallowRef`, `isRef`, `isShallow`, `unref`, `toValue`, `triggerRef`, `toRef`, `toRefs`, `proxyRefs` |
+| [`computed.md`](computed) | `computed` |
+| [`reactive.md`](reactive) | `reactive`, `shallowReactive`, `readonly`, `shallowReadonly`, `isReactive`, `isReadonly`, `isShallow`, `isProxy`, `toRaw`, `markRaw`, `toReactive` |
+| [`effect.md`](effect) | `effect`, `stop`, `onEffectCleanup`, `pauseTracking`, `enableTracking`, `resetTracking` |
+| [`watch.md`](watch) | `watch`, `watchEffect`, `onWatcherCleanup` |
+| [`scope.md`](scope) | `effectScope`, `getCurrentScope`, `onScopeDispose` |
 
 Not covered here: `Dep`/`Link`, the free `track()`/`trigger()`
 functions, and other internals. Those exist, but they're building
