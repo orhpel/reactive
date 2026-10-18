@@ -16,9 +16,7 @@ theme:
 nav:
   - Home: index.md
   - Reference:
-      - Übersicht: Reference/index.md
-      # Füge hier weitere Seiten aus docs/Reference/ hinzu
-  # Weitere Ordner/Seiten nach demselben Muster
+      - Overview: Reference/index.md
 
 plugins:
   - search
