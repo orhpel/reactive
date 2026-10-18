@@ -1,6 +1,6 @@
 # Reference
 
-The prose docs (see [the guide](../README.md)) explain what things are
+The prose docs (see [the guide](https://orhpel.github.io/reactive/)) explain what things are
 *for* and how to use them, with examples. This reference is the terse,
 precise version: every public function, its exact signature, and its
 exact behavior — including the edge cases. If you already know roughly
@@ -15,12 +15,12 @@ Grouped by topic, not by source file — so if you're looking for
 
 | File | Covers |
 |---|---|
-| [`ref.md`](ref.md) | `ref`, `shallowRef`, `isRef`, `isShallow`, `unref`, `toValue`, `triggerRef`, `toRef`, `toRefs`, `proxyRefs` |
-| [`computed.md`](computed.md) | `computed` |
-| [`reactive.md`](reactive.md) | `reactive`, `shallowReactive`, `readonly`, `shallowReadonly`, `isReactive`, `isReadonly`, `isShallow`, `isProxy`, `toRaw`, `markRaw`, `toReactive` |
-| [`effect.md`](effect.md) | `effect`, `stop`, `onEffectCleanup`, `pauseTracking`, `enableTracking`, `resetTracking` |
-| [`watch.md`](watch.md) | `watch`, `watchEffect`, `onWatcherCleanup` |
-| [`scope.md`](scope.md) | `effectScope`, `getCurrentScope`, `onScopeDispose` |
+| [`ref`](ref.md) | `ref`, `shallowRef`, `isRef`, `isShallow`, `unref`, `toValue`, `triggerRef`, `toRef`, `toRefs`, `proxyRefs` |
+| [`computed`](computed.md) | `computed` |
+| [`reactive`](reactive.md) | `reactive`, `shallowReactive`, `readonly`, `shallowReadonly`, `isReactive`, `isReadonly`, `isShallow`, `isProxy`, `toRaw`, `markRaw`, `toReactive` |
+| [`effect`](effect.md) | `effect`, `stop`, `onEffectCleanup`, `pauseTracking`, `enableTracking`, `resetTracking` |
+| [`watch`](watch.md) | `watch`, `watchEffect`, `onWatcherCleanup` |
+| [`scope`](scope.md) | `effectScope`, `getCurrentScope`, `onScopeDispose` |
 
 Not covered here: `Dep`/`Link`, the free `track()`/`trigger()`
 functions, and other internals. Those exist, but they're building
