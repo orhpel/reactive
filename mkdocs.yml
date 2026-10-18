@@ -1,23 +1,11 @@
+site_name: Reactive Documentation
 site_url: https://orhpel.github.io/reactive/
 repo_url: https://github.com/orhpel/reactive
 edit_uri: edit/main/docs/
-site_name: Reactive Documentation
+
 theme:
   name: material
-  language: de
-  palette:
-    - media: "(prefers-color-scheme: light)"
-      scheme: default
-      primary: indigo
-      toggle:
-        icon: material/brightness-7
-        name: Switch to dark mode
-    - media: "(prefers-color-scheme: dark)"
-      scheme: slate
-      primary: indigo
-      toggle:
-        icon: material/brightness-4
-        name: Switch to light mode
+  language: en
   features:
     - navigation.sections
     - navigation.expand
@@ -27,8 +15,36 @@ theme:
 
 nav:
   - Home: index.md
+  - Introduction: 00-introduction.md
+  - Installation: 01-installation.md
+  - Ref and Effect: 02-ref-and-effect.md
+  - Computed: 03-computed.md
+  - Reactive Objects: 04-reactive-objects.md
+  - Watch: 05-watch.md
+  - Ref Variants: 06-ref-variants.md
+  - Reactive Variants: 07-reactive-variants.md
+  - Effect Scope: 08-effect-scope.md
+  - Deep Watching: 09-deep-watching.md
+  - Lua Interop: 10-lua-interop.md
+  - Iteration Details: 11-iteration-details.md
+  - Tracking Control: 12-tracking-control.md
+  - Differences from Vue: 90-differences-from-vue.md
+  - Examples:
+      - Overview: examples/README.md
+      - Reactive Counter: examples/01-reactive-counter.md
+      - Shopping Cart: examples/02-shopping-cart.md
+      - Config Auto-Reload: examples/03-config-auto-reload.md
+      - Game Simulation Tick: examples/04-game-simulation-tick.md
+      - Event Bus Replacement: examples/05-event-bus-replacement.md
+      - Lazy Derived Graph: examples/06-lazy-derived-graph.md
   - Reference:
-      - Overview: Reference/index.md
+      - Overview: reference/README.md
+      - Computed: reference/computed.md
+      - Effect: reference/effect.md
+      - Reactive: reference/reactive.md
+      - Ref: reference/ref.md
+      - Scope: reference/scope.md
+      - Watch: reference/watch.md
 
 plugins:
   - search
