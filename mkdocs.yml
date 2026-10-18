@@ -1,11 +1,23 @@
-site_name: Reactive Documentation
 site_url: https://orhpel.github.io/reactive/
 repo_url: https://github.com/orhpel/reactive
 edit_uri: edit/main/docs/
-
+site_name: Reactive Documentation
 theme:
   name: material
   language: de
+  palette:
+    - media: "(prefers-color-scheme: light)"
+      scheme: default
+      primary: indigo
+      toggle:
+        icon: material/brightness-7
+        name: Switch to dark mode
+    - media: "(prefers-color-scheme: dark)"
+      scheme: slate
+      primary: indigo
+      toggle:
+        icon: material/brightness-4
+        name: Switch to light mode
   features:
     - navigation.sections
     - navigation.expand
