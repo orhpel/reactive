@@ -105,22 +105,22 @@ object and hope for the best."
 
 ## Do you have more?
 
-Yes. In [docs/](index.md) you'll find:
+Yes. In the [documentation](https://orhpel.github.io/reactive/) you'll find:
 
-- [ref() and effect()](02-ref-and-effect.md) — the intro
-- [computed()](03-computed.md) — lazy, cached, chainable
-- [reactive()](04-reactive-objects.md) — deep proxies for your tables
-- [watch() and watchEffect()](05-watch.md) — with the full `deep`
+- [ref() and effect()](https://orhpel.github.io/reactive/02-ref-and-effect/) — the intro
+- [computed()](https://orhpel.github.io/reactive/03-computed/) — lazy, cached, chainable
+- [reactive()](https://orhpel.github.io/reactive/04-reactive-objects/) — deep proxies for your tables
+- [watch() and watchEffect()](https://orhpel.github.io/reactive/05-watch/) — with the full `deep`
   option spec
-- [Deep watching](09-deep-watching.md) — why `deep = N` means what
+- [Deep watching](https://orhpel.github.io/reactive/09-deep-watching/) — why `deep = N` means what
   it means
-- [Iteration details](11-iteration-details.md) — what `pairs()`,
+- [Iteration details](https://orhpel.github.io/reactive/11-iteration-details/) — what `pairs()`,
   `#`, and `ipairs()` actually trigger
-- [Tracking control](12-tracking-control.md) — the pause/enable/
+- [Tracking control](https://orhpel.github.io/reactive/12-tracking-control/) — the pause/enable/
   reset trio
-- [effectScope()](08-effect-scope.md) — disposal groups
+- [effectScope()](https://orhpel.github.io/reactive/08-effect-scope/) — disposal groups
 
-…and a [`examples/`](examples/README.md) folder with
+…and a [`examples/`](https://orhpel.github.io/reactive/examples/) folder with
 **runnable, real-world-shaped examples** showing the library in action
 beyond toy counters. More are landing as the project grows.
 
@@ -131,7 +131,7 @@ Feature | Vue 3 | reactive.lua
 `ref` / `computed` / `effect` | ✅ | ✅
 `reactive` / `readonly` / `shallow*` | ✅ | ✅
 `watch` / `watchEffect` | ✅ | ✅
-`effectScope` | ✅ (nested) | ✅ (flat only — [see why](08-effect-scope.md))
+`effectScope` | ✅ (nested) | ✅ (flat only — [see why](https://orhpel.github.io/reactive/08-effect-scope/))
 `toRef` / `toRefs` / `proxyRefs` | ✅ | ✅
 Collection handlers (`Map`/`Set`/etc.) | ✅ | ❌ (Lua has one table type)
 `customRef`, SSR helpers | ✅ | ❌ (not implemented)
