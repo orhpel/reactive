@@ -16,12 +16,12 @@ whatever you actually need.
 
 | File | Shows off |
 |---|---|
-| [01-reactive-counter.md](01-reactive-counter.md) | `ref()`, `computed()`, `effect()` — the hello world that isn't a hello world |
-| [02-shopping-cart.md](02-shopping-cart.md) | `reactive()`, computed chains, **writable** computed |
-| [03-config-auto-reload.md](03-config-auto-reload.md) | `watch()` with `deep`, `onCleanup`, and lifecycle hygiene |
-| [04-game-simulation-tick.md](04-game-simulation-tick.md) | `effectScope()` for transient subsystems, `watch()` for events |
-| [05-event-bus-replacement.md](05-event-bus-replacement.md) | `effect()` + scope as a *replacement* for callback soup |
-| [06-lazy-derived-graph.md](06-lazy-derived-graph.md) | computed-on-computed chains, and why "just recompute everything" stops scaling |
+| [01-reactive-counter](01-reactive-counter.md) | `ref()`, `computed()`, `effect()` — the hello world that isn't a hello world |
+| [02-shopping-cart](02-shopping-cart.md) | `reactive()`, computed chains, **writable** computed |
+| [03-config-auto-reload](03-config-auto-reload.md) | `watch()` with `deep`, `onCleanup`, and lifecycle hygiene |
+| [04-game-simulation-tick](04-game-simulation-tick.md) | `effectScope()` for transient subsystems, `watch()` for events |
+| [05-event-bus-replacement](05-event-bus-replacement.md) | `effect()` + scope as a *replacement* for callback soup |
+| [06-lazy-derived-graph](06-lazy-derived-graph.md) | computed-on-computed chains, and why "just recompute everything" stops scaling |
 
 Start with [01](01-reactive-counter.md). It's the shortest and sets up
 the mental model every other example builds on.
