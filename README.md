@@ -161,7 +161,7 @@ folder — they're auto-detected).
 ## Contributing
 
 Open an issue, open a PR, send a carrier pigeon. The docs in
-[docs/](index.md) explain the design decisions and where the
+[docs/](https://orhpel.github.io/reactive/) explain the design decisions and where the
 deliberate divergences from Vue are — read them before proposing
 "improvements" that break the design intent.
 
