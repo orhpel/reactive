@@ -4,19 +4,15 @@ repo_url: https://github.com/orhpel/reactive
 edit_uri: edit/main/docs/
 
 theme:
-  name: material
+  name: void
   palette:
     - media: "(prefers-color-scheme: light)"
       scheme: default
-      primary: blue-grey   # <-- Hier die gewünschte Farbe eintragen
-      accent: blue-grey
       toggle:
         icon: material/brightness-7
         name: Switch to dark mode
     - media: "(prefers-color-scheme: dark)"
       scheme: slate
-      primary: blue-grey
-      accent: blue-grey
       toggle:
         icon: material/brightness-4
         name: Switch to light mode
