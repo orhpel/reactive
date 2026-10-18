@@ -39,7 +39,6 @@ is.
 
 ## Reference
 
-Prefer looking things up over reading prose? The [reference](reference/)
-has every public function with its exact signature and behavior, no
-fluff. See [reference/README.md](reference/README.md) for how it's
-organized.
+Prefer looking things up over reading prose? The reference has every public
+function with its exact signature and behavior, no fluff.
+[See the reference index](reference/) for how it's organized.
