@@ -7,6 +7,22 @@ honest list of where `reactive.lua` intentionally parts ways with
 every item here was a deliberate call, usually because Lua (or this
 project's actual needs) simply didn't call for the extra complexity.
 
+## How does it compare to Vue's version?
+
+Feature | Vue 3 | reactive.lua
+--- | --- | ---
+`ref` / `computed` / `effect` | ✅ | ✅
+`reactive` / `readonly` / `shallow*` | ✅ | ✅
+`watch` / `watchEffect` | ✅ | ✅
+`effectScope` | ✅ (nested) | ✅ (flat only — [see why](https://orhpel.github.io/reactive/08-effect-scope/))
+`toRef` / `toRefs` / `proxyRefs` | ✅ | ✅
+Collection handlers (`Map`/`Set`/etc.) | ✅ | ❌ (Lua has one table type)
+`customRef`, SSR helpers | ✅ | ❌ (not implemented)
+Virtual DOM, components, templates | ✅ | ❌ (never will be)
+
+The reactivity core is intentionally **faithful**; the framework around
+it is intentionally **absent**.
+
 ## Dropped entirely
 
 - **`Map`/`Set`/`WeakMap`/`WeakSet` reactivity.** Lua has exactly one
